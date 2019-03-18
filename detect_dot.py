@@ -41,6 +41,8 @@ def main():
     with PiCamera() as camera:
 
         camera.resolution = (WIDTH, HEIGHT)
+        # I had the camera hanging upside-down, so I rotate the image (not that
+        # it matters for dots).
         camera.rotation = 180
 
         # The camera requires two seconds of warm-up time for the sensor levels
