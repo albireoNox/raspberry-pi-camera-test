@@ -32,7 +32,8 @@ with PiCamera() as camera:
     
     avg = sum(map(sum, Y)) / float(sum(map(len, Y))) 
     
-    x = map(lambda row: map(lambda pixel: 255 if pixel > 12 else 0, row), Y)
+    #x = Y
+    x = map(lambda row: map(lambda pixel: 255 if pixel > 25 else 0, row), Y)
     
     with open("test.png", 'wb') as f:
         w = png.Writer(WIDTH, HEIGHT, greyscale=True)

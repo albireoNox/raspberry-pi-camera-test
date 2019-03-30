@@ -93,11 +93,10 @@ def main(config):
                     reshape((config.height, config.width))
 
                 blink_led.off()
-
+                
                 _globals.num_dark_pixels = 0
                 def is_dark(pixel, _globals):
-                    # Define 12 as an arbitrary luminance cutoff for "dark" pixels.
-                    if pixel <= 12:
+                    if pixel <= config.luminance_threshold:
                         _globals.num_dark_pixels += 1
                         return True
                     else:
@@ -117,6 +116,8 @@ def main(config):
 
                 d, center = dispersion(points)
                 dst_sqrd = math.pow(center[0] - config.dot_region_x, 2) + math.pow(center[1] - config.dot_region_y, 2)
+                    
+                print("pct_dark:{} dsp:{} dst_sqrd:{}".format(pct_dark, d, dst_sqrd))
 
                 # The following values were determined experimentally.
                 if pct_dark > config.pct_dark_low and pct_dark < config.pct_dark_high and d < config.max_dispersion:

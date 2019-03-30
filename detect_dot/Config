@@ -6,15 +6,15 @@ height=128
 
 # Value in range [0, 255]. Pixels with luminance values below threshold will be considered "dark"
 # and will be considered for dot detection. 
-luminance_threshold=12
+luminance_threshold=22
 
 # Range (as a percentage of total pixels) of pixels below luminance threshold allowed for an 
 # image to be considered a dot. 
-pct_dark_low=0.14
-pct_dark_high=4.0
+pct_dark_low=0.12
+pct_dark_high=2.0
 
 # Maximum dispersion allowed for an image to be considered a dot
-max_dispersion=25
+max_dispersion=40
 
 # Region in which to seach for the dot, defined as the center point and radius, in pixel coordinates
 dot_region_x=64
