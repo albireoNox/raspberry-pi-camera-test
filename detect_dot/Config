@@ -6,7 +6,7 @@ height=128
 
 # Value in range [0, 255]. Pixels with luminance values below threshold will be considered "dark"
 # and will be considered for dot detection. 
-luminance_threshold=22
+luminance_threshold=24
 
 # Range (as a percentage of total pixels) of pixels below luminance threshold allowed for an 
 # image to be considered a dot. 

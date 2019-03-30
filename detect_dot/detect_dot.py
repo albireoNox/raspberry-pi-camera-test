@@ -61,9 +61,9 @@ def dispersion(points):
 num_dark_pixels = 0
 
 def main(config):
-    success_led = LED(config.success_pin)
-    dot_anywhere_led = LED(config.dot_found_pin)
-    blink_led = LED(config.blink_pin)
+    success_led = LED(config.success_pin, active_high=False)
+    dot_anywhere_led = LED(config.dot_found_pin, active_high=False)
+    blink_led = LED(config.blink_pin, active_high=False)
     _globals = Globals()
 
     # When capturing raw input, the camera uses a resolution whose width is a
