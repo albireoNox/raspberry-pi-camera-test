@@ -7,8 +7,8 @@ import numpy as np
 import png
 import io
 
-WIDTH = 256
-HEIGHT = 256
+WIDTH = 128
+HEIGHT = 128
 
 if (WIDTH % 32 != 0 or HEIGHT % 16 != 0):
     print("INVALID RESOLUTION")
@@ -32,7 +32,7 @@ with PiCamera() as camera:
     
     avg = sum(map(sum, Y)) / float(sum(map(len, Y))) 
     
-    x = map(lambda row: map(lambda pixel: 255 if pixel > avg else 0, row), Y)
+    x = map(lambda row: map(lambda pixel: 255 if pixel > 12 else 0, row), Y)
     
     with open("test.png", 'wb') as f:
         w = png.Writer(WIDTH, HEIGHT, greyscale=True)
