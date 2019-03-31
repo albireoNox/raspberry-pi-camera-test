@@ -41,6 +41,17 @@ class Globals:
     def __init__(self):
         self.num_dark_pixels = 0
 
+def write_buf(buf, start, data):
+    index = start
+    for byte in data:
+        buf[index] = byte
+        index += 1
+
+def get_overlay(config):
+    buffer = bytearray(config.width * config.height * 4)
+    write_buf(buffer, (config.dot_region_y * config.width + config.dot_region_x) * 4, [255, 0, 0, 255])
+    return buffer            
+
 # Given a list of pixels (as x, y pairs), calculate root mean squared deviation
 # as a measure of dispersion of the points.
 def dispersion(points):
@@ -76,6 +87,7 @@ def main(config):
     with PiCamera() as camera:
 
         camera.resolution = (config.width, config.height)
+        camera.add_overlay(get_overlay(config), format='rgba', layer=3)
 
         # The camera requires two seconds of warm-up time for the sensor levels
         # to stabilize before we can begin capturing images.
