@@ -27,6 +27,16 @@ REGION_OVERLAY_LAYER = 3
 DOT_OVERLAY_LAYER = 4
 
 class Config:
+    class Dot_Params:
+        def __init__(self, config, section):
+            self.pct_dark_low = config.getfloat(section, "pct_dark_low")
+            self.pct_dark_high = config.getfloat(section, "pct_dark_high")
+            self.max_dispersion = config.getfloat(section, "max_dispersion")
+            self.luminance_threshold = config.getint(section, "luminance_threshold")
+            if self.luminance_threshold < 0 or self.luminance_threshold > 255:
+                print("Luminance threshold must be between 0 and 255", file=sys.stderr)
+                exit(1)
+    
     def __init__(self, config_file_path):
         config = ConfigParser.SafeConfigParser()
         config.read(config_file_path)
@@ -34,18 +44,14 @@ class Config:
         self.width = config.getint("dot", "width")
         self.height = config.getint("dot", "height")
         self.num_pixels = self.width * self.height
-        self.luminance_threshold = config.getint("dot", "luminance_threshold")
-        if self.luminance_threshold < 0 or self.luminance_threshold > 255:
-            print("Luminance threshold must be between 0 and 255", file=sys.stderr)
-            exit(1)
-        self.pct_dark_low = config.getfloat("dot", "pct_dark_low")
-        self.pct_dark_high = config.getfloat("dot", "pct_dark_high")
-        self.max_dispersion = config.getfloat("dot", "max_dispersion")
+    
         self.dot_region_center = Point(
             config.getint("dot", "dot_region_x"),
             config.getint("dot", "dot_region_y"))
         self.dot_region_radius = config.getint("dot", "dot_region_radius")
         self.dot_region_radius_squared = self.dot_region_radius * self.dot_region_radius
+
+        self.dot_params = Config.Dot_Params(config, "dot")
 
         self.dot_region = Rectangle(
             config.getint("crop", "left"),
@@ -121,6 +127,45 @@ def output_debug_image(camera, config):
 # avoided in Python 3).
 num_dark_pixels = 0
 
+# Return center
+def find_dot(config, image, region, dot_params, exclude_region=None):
+    # Shift exclude_region
+    if exclude_region is not None:
+        rel_top_left = region.relative_point(exclude_region.top_left())
+        exclude_region = Rectangle(
+            rel_top_left.x, rel_top_left.x + exclude_region.width(),
+            rel_top_left.y, rel_top_left.y + exclude_region.height())
+    
+    def is_dark(pixel, point, dot_params, exclude_region=None):
+        if exclude_region is not None and exclude_region.contains_point(point):
+            return False
+        if pixel <= dot_params.luminance_threshold:
+            return True
+        else:
+            return False
+
+    mask = map_pixels(image, lambda px, p: is_dark(px, p, dot_params, exclude_region))
+
+    # Create a list of the dark pixels
+    points = []
+    for row in range(len(mask)):
+        for col in range(len(mask[row])):
+            if mask[row][col]:
+                points.append((col, row))
+
+    # Percentage of dark pixels relative to all pixels
+    pct_dark = (len(points) * 100.0) / config.num_pixels
+
+    d, center = dispersion(points)
+    
+    if pct_dark > dot_params.pct_dark_low \
+            and pct_dark < dot_params.pct_dark_high \
+            and d < dot_params.max_dispersion:
+        
+        return center + region.top_left()
+    else:
+        return None
+
 def main(config):
     success_led = LED(config.success_pin, active_high=False)
     dot_anywhere_led = LED(config.dot_found_pin, active_high=False)
@@ -169,43 +214,22 @@ def main(config):
 
                 blink_led.off()
                 
-                _globals.num_dark_pixels = 0
-                def is_dark(pixel, point, _globals):
-                    absolute_point = point + _globals.config.dot_region.top_left()
-                    if _globals.config.reference_region.contains_point(absolute_point):
-                        return False
-                    if pixel <= config.luminance_threshold:
-                        _globals.num_dark_pixels += 1
-                        return True
-                    else:
-                        return False
-
-                mask = map_pixels(Y, lambda px, p: is_dark(px, p, _globals), subregion=config.dot_region)
-                
-                # Percentage of dark pixels relative to all pixels
-                pct_dark = (_globals.num_dark_pixels * 100.0) / config.num_pixels
-
-                # Create a list of the dark pixels
-                cropped_center = config.dot_region.relative_point(config.dot_region_center)
-                points = []
-                for row in range(len(mask)):
-                    for col in range(len(mask[row])):
-                        if mask[row][col]:
-                            points.append((col, row))
-
-                d, center = dispersion(points)
-                dst_sqrd = math.pow(center.x - cropped_center.x, 2) + math.pow(center.y - cropped_center.y, 2)
-                    
-                print("pct_dark:{} dsp:{} dst_sqrd:{}".format(pct_dark, d, dst_sqrd))
+                center = find_dot(
+                    config,
+                    map_pixels(Y, subregion=config.dot_region),
+                    config.dot_region,
+                    config.dot_params,
+                    exclude_region=config.reference_region)
 
                 if detection_overlay is not None:
                     camera.remove_overlay(detection_overlay)
                     detection_overlay = None
 
                 # The following values were determined experimentally.
-                if pct_dark > config.pct_dark_low and pct_dark < config.pct_dark_high and d < config.max_dispersion:
+                if center is not None:
+                    dst_sqrd = math.pow(center.x - config.dot_region_center.x, 2) + math.pow(center.y - config.dot_region_center.y, 2)
                     detection_overlay = camera.add_overlay(
-                        get_detection_overlay(config, center + config.dot_region.top_left()),
+                        get_detection_overlay(config, center),
                         format='rgba',
                         layer=DOT_OVERLAY_LAYER) 
                     dot_anywhere_led.on()

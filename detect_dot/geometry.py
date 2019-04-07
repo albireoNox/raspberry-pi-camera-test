@@ -8,6 +8,9 @@ class Point:
     
     def __add__(self, other):
         return Point(self.x + other.x, self.y + other.y)
+    
+    def __sub__(self, other):
+        return Point(-self.x, -self.y) + other
 
 class Rectangle:
     # Define a rectangle between [left, right) and [top, bottom)
@@ -24,7 +27,7 @@ class Rectangle:
         return self.bottom - self.top
     
     def top_left(self):
-        return Point(self.left, self.top)
+        return Point(self.left, self.top)    
     
     def points(self):
         for x in range(self.left, self.right):
@@ -51,6 +54,9 @@ class Rectangle:
     def contains_point(self, point):
         return point.x >= self.left and point.x < self.right and \
                point.y >= self.top  and point.y < self.bottom
+    
+    def __repr__(self):
+        return "({}, {}, {}, {})".format(self.left, self.top, self.width(), self.height())
 
 # Apply function f to pixel_data (which is a list of list), optionally cropping out anything not in the subregion
 def map_pixels(pixel_data, f=None, subregion=None):
