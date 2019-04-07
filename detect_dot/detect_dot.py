@@ -17,6 +17,11 @@ from geometry import *
 
 CENTER_DOT_COLOR = [255, 0, 0, 255]
 CLIP_OVERLAY_COLOR = [50, 50, 50, 180]
+REFERENCE_OVERLAY_COLOR = [0, 180, 180, 60]
+FOUND_DOT_COLOR = [0, 255, 0, 255]
+
+REGION_OVERLAY_LAYER = 3
+REFERENCE_OVERLAY_LAYER = 4
 
 class Config:
     def __init__(self, config_file_path):
@@ -45,6 +50,12 @@ class Config:
             config.getint("crop", "top"),
             self.height - config.getint("crop", "bottom"))
 
+        self.reference_region = Rectangle(
+            config.getint("reference", "left"),
+            config.getint("reference", "right"),
+            config.getint("reference", "top"),
+            config.getint("reference", "bottom"))
+
         self.success_pin = config.getint("pins", "success_pin")
         self.dot_found_pin = config.getint("pins", "dot_found_pin")
         self.blink_pin = config.getint("pins", "blink_pin")
@@ -68,9 +79,17 @@ def get_overlay(config):
     image = Rectangle(0, config.width, 0, config.height)
     for point in image.points_minus_rectangle(config.dot_region):
         write_buf(buffer, point.x, point.y, config.width, CLIP_OVERLAY_COLOR)
-        
+    for point in config.reference_region.points():
+        write_buf(buffer, point.x, point.y, config.width, REFERENCE_OVERLAY_COLOR)
+    
     write_buf(buffer, config.dot_region_center.x, config.dot_region_center.y, config.width, CENTER_DOT_COLOR)
     
+    return buffer            
+
+def get_detection_overlay(config, point):
+    buffer = bytearray(config.width * config.height * 4)
+    if point is not None: 
+        write_buf(buffer, int(point.x), int(point.y), config.width, FOUND_DOT_COLOR)
     return buffer            
 
 # Given a list of pixels (as x, y pairs), calculate root mean squared deviation
@@ -102,6 +121,7 @@ def main(config):
     blink_led = LED(config.blink_pin, active_high=False)
     debug_button = Button(config.debug_button_pin)
     _globals = Globals()
+    detection_overlay = None
 
     # When capturing raw input, the camera uses a resolution whose width is a
     # factor of 32 for width and 16 for height, so we restrict the resolution to
@@ -114,16 +134,20 @@ def main(config):
 
         camera.rotation = config.rotation
         camera.resolution = (config.width, config.height)
-        camera.add_overlay(get_overlay(config), format='rgba', layer=3)
+        region_overlay_buffer = get_overlay(config)
+        region_overlay = camera.add_overlay(region_overlay_buffer, format='rgba', layer=REGION_OVERLAY_LAYER)
+        detection_overlay = camera.add_overlay(
+            get_detection_overlay(config, None), format='rgba', layer=REFERENCE_OVERLAY_LAYER) 
 
         # The camera requires two seconds of warm-up time for the sensor levels
         # to stabilize before we can begin capturing images.
         time.sleep(2)
         camera.start_preview()
 
+        num_pictures = 0
         # We just take 50 samples as fast as we can.
         while(True):
-            
+
             if debug_button.is_pressed:
                 output_debug_image(camera, config)
                 time.sleep(2)
@@ -165,8 +189,16 @@ def main(config):
                     
                 print("pct_dark:{} dsp:{} dst_sqrd:{}".format(pct_dark, d, dst_sqrd))
 
+                if detection_overlay is not None:
+                    camera.remove_overlay(detection_overlay)
+                    detection_overlay = None
+
                 # The following values were determined experimentally.
                 if pct_dark > config.pct_dark_low and pct_dark < config.pct_dark_high and d < config.max_dispersion:
+                    detection_overlay = camera.add_overlay(
+                        get_detection_overlay(config, center + config.dot_region.top_left()),
+                        format='rgba',
+                        layer=REFERENCE_OVERLAY_LAYER) 
                     dot_anywhere_led.on()
                     if dst_sqrd < config.dot_region_radius_squared:
                         success_led.on()

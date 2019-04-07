@@ -4,7 +4,10 @@ class Point:
         self.y = y
         
     def __repr__(self):
-        return "({}, {})".format(self.x, self.y)        
+        return "({}, {})".format(self.x, self.y)
+    
+    def __add__(self, other):
+        return Point(self.x + other.x, self.y + other.y)
 
 class Rectangle:
     # Define a rectangle between [left, right) and [top, bottom)
@@ -19,6 +22,9 @@ class Rectangle:
     
     def height(self):
         return self.bottom - self.top
+    
+    def top_left(self):
+        return Point(self.left, self.top)
     
     def points(self):
         for x in range(self.left, self.right):
@@ -41,6 +47,10 @@ class Rectangle:
     # Return point in coordinate system where top left of the rectangle is (0,0)            
     def relative_point(self, point):
         return Point(point.x - self.left, point.y - self.top)
+    
+    def contains_point(self, point):
+        return point.x >= self.left and point.x < self.right and \
+               point.y >= self.top  and point.y < self.bottom
 
 # Apply function f to pixel_data (which is a list of list), optionally cropping out anything not in the subregion
 def map_pixels(pixel_data, f=None, subregion=None):

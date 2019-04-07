@@ -28,6 +28,13 @@ right=20
 top=20
 bottom=30
 
+[reference]
+# Define the region to look for the reference dot by the top-left and bottom-right coordinates
+left=0
+top=80
+right=128
+bottom=128
+
 [camera]
 rotation=90
 
