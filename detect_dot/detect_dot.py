@@ -9,9 +9,10 @@ import numpy as np
 import png
 import io
 import math
-from gpiozero import LED
+from gpiozero import LED, Button
 from argparse import ArgumentParser
 import ConfigParser
+from black_and_white import generate_debug_picture
 
 class Config:
     def __init__(self, config_file_path):
@@ -36,6 +37,7 @@ class Config:
         self.success_pin = config.getint("pins", "success_pin")
         self.dot_found_pin = config.getint("pins", "dot_found_pin")
         self.blink_pin = config.getint("pins", "blink_pin")
+        self.debug_button_pin = config.getint("pins", "debug_button_pin")
 
 class Globals:
     def __init__(self):
@@ -67,6 +69,10 @@ def dispersion(points):
     return (math.sqrt(sum(map(lambda p: math.pow(p[0]-mode_x, 2) + math.pow(p[1]-mode_y, 2), points)) / len(points)),
             (mode_x, mode_y))
 
+def output_debug_image(camera, config):
+    generate_debug_picture(camera, config.luminance_threshold)
+    
+
 # Needs to be a global in order to reference in the nested method below (could
 # avoided in Python 3).
 num_dark_pixels = 0
@@ -75,6 +81,7 @@ def main(config):
     success_led = LED(config.success_pin, active_high=False)
     dot_anywhere_led = LED(config.dot_found_pin, active_high=False)
     blink_led = LED(config.blink_pin, active_high=False)
+    debug_button = Button(config.debug_button_pin)
     _globals = Globals()
 
     # When capturing raw input, the camera uses a resolution whose width is a
@@ -96,6 +103,12 @@ def main(config):
 
         # We just take 50 samples as fast as we can.
         while(True):
+            
+            if debug_button.is_pressed:
+                output_debug_image(camera, config)
+                time.sleep(2)
+                continue    
+            
             blink_led.on()
             with io.BytesIO() as stream: # Buffer for pixel data
 
