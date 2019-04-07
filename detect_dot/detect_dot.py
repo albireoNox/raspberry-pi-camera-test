@@ -13,6 +13,7 @@ from gpiozero import LED, Button
 from argparse import ArgumentParser
 import ConfigParser
 from black_and_white import generate_debug_picture
+from geometry import *
 
 CENTER_DOT_COLOR = [255, 0, 0, 255]
 CLIP_OVERLAY_COLOR = [50, 50, 50, 180]
@@ -32,15 +33,17 @@ class Config:
         self.pct_dark_low = config.getfloat("dot", "pct_dark_low")
         self.pct_dark_high = config.getfloat("dot", "pct_dark_high")
         self.max_dispersion = config.getfloat("dot", "max_dispersion")
-        self.dot_region_x = config.getint("dot", "dot_region_x")
-        self.dot_region_y = config.getint("dot", "dot_region_y")
+        self.dot_region_center = Point(
+            config.getint("dot", "dot_region_x"),
+            config.getint("dot", "dot_region_y"))
         self.dot_region_radius = config.getint("dot", "dot_region_radius")
         self.dot_region_radius_squared = self.dot_region_radius * self.dot_region_radius
 
-        self.crop_left = config.getint("crop", "left")
-        self.crop_right = self.width - config.getint("crop", "right")
-        self.crop_top = config.getint("crop", "top")
-        self.crop_bottom = self.height - config.getint("crop", "bottom")
+        self.dot_region = Rectangle(
+            config.getint("crop", "left"),
+            self.width - config.getint("crop", "right"),
+            config.getint("crop", "top"),
+            self.height - config.getint("crop", "bottom"))
 
         self.success_pin = config.getint("pins", "success_pin")
         self.dot_found_pin = config.getint("pins", "dot_found_pin")
@@ -62,20 +65,11 @@ def write_buf(buf, x, y, width, data):
 
 def get_overlay(config):
     buffer = bytearray(config.width * config.height * 4)
-    
-    for col in range(config.crop_left):
-        for row in range(config.height):
-            write_buf(buffer, col, row, config.width, CLIP_OVERLAY_COLOR)
-    
-    for col in range(config.crop_left, config.crop_right):
-        for row in (range(config.crop_top) + range(config.crop_bottom, config.height)):
-            write_buf(buffer, col, row, config.width, CLIP_OVERLAY_COLOR)
-    
-    for col in range(config.crop_right, config.width):
-        for row in range(config.height):
-            write_buf(buffer, col, row, config.width, CLIP_OVERLAY_COLOR)        
-    
-    write_buf(buffer, config.dot_region_x, config.dot_region_y, config.width, CENTER_DOT_COLOR)
+    image = Rectangle(0, config.width, 0, config.height)
+    for point in image.points_minus_rectangle(config.dot_region):
+        write_buf(buffer, point.x, point.y, config.width, CLIP_OVERLAY_COLOR)
+        
+    write_buf(buffer, config.dot_region_center.x, config.dot_region_center.y, config.width, CENTER_DOT_COLOR)
     
     return buffer            
 
@@ -83,7 +77,7 @@ def get_overlay(config):
 # as a measure of dispersion of the points.
 def dispersion(points):
     if len(points) == 0:
-        return (float("inf"), (0, 0))
+        return (float("inf"), Point(0, 0))
     sum_x = 0
     sum_y = 0
     for point in points:
@@ -92,7 +86,7 @@ def dispersion(points):
     mode_x = sum_x / float(len(points))
     mode_y = sum_y / float(len(points))
     return (math.sqrt(sum(map(lambda p: math.pow(p[0]-mode_x, 2) + math.pow(p[1]-mode_y, 2), points)) / len(points)),
-            (mode_x, mode_y))
+            Point(mode_x, mode_y))
 
 def output_debug_image(camera, config):
     generate_debug_picture(camera, config.luminance_threshold)
@@ -153,15 +147,13 @@ def main(config):
                     else:
                         return False
 
-                mask = [[is_dark(pixel, _globals) for pixel in row[config.crop_left:config.crop_right]] \
-                        for row in Y[config.crop_top:config.crop_bottom]]
-
+                mask = map_pixels(Y, lambda p: is_dark(p, _globals), subregion=config.dot_region)
+                
                 # Percentage of dark pixels relative to all pixels
                 pct_dark = (_globals.num_dark_pixels * 100.0) / config.num_pixels
 
                 # Create a list of the dark pixels
-                cropped_center_x = config.dot_region_x - config.crop_left
-                cropped_center_y = config.dot_region_y - config.crop_top
+                cropped_center = config.dot_region.relative_point(config.dot_region_center)
                 points = []
                 for row in range(len(mask)):
                     for col in range(len(mask[row])):
@@ -169,7 +161,7 @@ def main(config):
                             points.append((col, row))
 
                 d, center = dispersion(points)
-                dst_sqrd = math.pow(center[0] - cropped_center_x, 2) + math.pow(center[1] - cropped_center_y, 2)
+                dst_sqrd = math.pow(center.x - cropped_center.x, 2) + math.pow(center.y - cropped_center.y, 2)
                     
                 print("pct_dark:{} dsp:{} dst_sqrd:{}".format(pct_dark, d, dst_sqrd))
 
