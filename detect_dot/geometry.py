@@ -55,10 +55,10 @@ class Rectangle:
 # Apply function f to pixel_data (which is a list of list), optionally cropping out anything not in the subregion
 def map_pixels(pixel_data, f=None, subregion=None):
     if f is None:
-        f = lambda p: p
+        f = lambda pixel, point: pixel
     
     if subregion is None:
         subregion = Rectangle(0, len(pixel_data[0]), 0, len(pixel_data))
     
-    return [[f(pixel) for pixel in row[subregion.left:subregion.right]]
-            for row in pixel_data[subregion.top:subregion.bottom]]
+    return [[f(pixel, Point(x, y)) for x, pixel in enumerate(row[subregion.left:subregion.right])]
+            for y, row in enumerate(pixel_data[subregion.top:subregion.bottom])]
