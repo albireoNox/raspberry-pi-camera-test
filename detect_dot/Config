@@ -17,11 +17,19 @@ pct_dark_high=4.0
 max_dispersion=40
 
 # Region in which to seach for the dot, defined as the center point and radius, in pixel coordinates
-dot_region_x=108
+dot_region_x=54
 dot_region_y=64
 dot_region_radius=6
 
+[crop]
+# Number of pixels to crop from each side of the image before trying to detect the dot. 
+left=10
+right=20
+top=20
+bottom=30
 
+[camera]
+rotation=90
 
 [pins]
 

@@ -14,6 +14,9 @@ from argparse import ArgumentParser
 import ConfigParser
 from black_and_white import generate_debug_picture
 
+CENTER_DOT_COLOR = [255, 0, 0, 255]
+CLIP_OVERLAY_COLOR = [50, 50, 50, 180]
+
 class Config:
     def __init__(self, config_file_path):
         config = ConfigParser.SafeConfigParser()
@@ -34,16 +37,24 @@ class Config:
         self.dot_region_radius = config.getint("dot", "dot_region_radius")
         self.dot_region_radius_squared = self.dot_region_radius * self.dot_region_radius
 
+        self.crop_left = config.getint("crop", "left")
+        self.crop_right = self.width - config.getint("crop", "right")
+        self.crop_top = config.getint("crop", "top")
+        self.crop_bottom = self.height - config.getint("crop", "bottom")
+
         self.success_pin = config.getint("pins", "success_pin")
         self.dot_found_pin = config.getint("pins", "dot_found_pin")
         self.blink_pin = config.getint("pins", "blink_pin")
         self.debug_button_pin = config.getint("pins", "debug_button_pin")
+        
+        self.rotation = config.getint("camera", "rotation")
 
 class Globals:
     def __init__(self):
         self.num_dark_pixels = 0
 
-def write_buf(buf, start, data):
+def write_buf(buf, x, y, width, data):
+    start = (y * width + x) * 4
     index = start
     for byte in data:
         buf[index] = byte
@@ -51,7 +62,21 @@ def write_buf(buf, start, data):
 
 def get_overlay(config):
     buffer = bytearray(config.width * config.height * 4)
-    write_buf(buffer, (config.dot_region_y * config.width + config.dot_region_x) * 4, [255, 0, 0, 255])
+    
+    for col in range(config.crop_left):
+        for row in range(config.height):
+            write_buf(buffer, col, row, config.width, CLIP_OVERLAY_COLOR)
+    
+    for col in range(config.crop_left, config.crop_right):
+        for row in (range(config.crop_top) + range(config.crop_bottom, config.height)):
+            write_buf(buffer, col, row, config.width, CLIP_OVERLAY_COLOR)
+    
+    for col in range(config.crop_right, config.width):
+        for row in range(config.height):
+            write_buf(buffer, col, row, config.width, CLIP_OVERLAY_COLOR)        
+    
+    write_buf(buffer, config.dot_region_x, config.dot_region_y, config.width, CENTER_DOT_COLOR)
+    
     return buffer            
 
 # Given a list of pixels (as x, y pairs), calculate root mean squared deviation
@@ -93,6 +118,7 @@ def main(config):
 
     with PiCamera() as camera:
 
+        camera.rotation = config.rotation
         camera.resolution = (config.width, config.height)
         camera.add_overlay(get_overlay(config), format='rgba', layer=3)
 
@@ -127,20 +153,23 @@ def main(config):
                     else:
                         return False
 
-                mask = [[is_dark(pixel, _globals) for pixel in row] for row in Y]
+                mask = [[is_dark(pixel, _globals) for pixel in row[config.crop_left:config.crop_right]] \
+                        for row in Y[config.crop_top:config.crop_bottom]]
 
                 # Percentage of dark pixels relative to all pixels
                 pct_dark = (_globals.num_dark_pixels * 100.0) / config.num_pixels
 
                 # Create a list of the dark pixels
+                cropped_center_x = config.dot_region_x - config.crop_left
+                cropped_center_y = config.dot_region_y - config.crop_top
                 points = []
-                for row in range(config.height):
-                    for col in range(config.width):
+                for row in range(len(mask)):
+                    for col in range(len(mask[row])):
                         if mask[row][col]:
                             points.append((col, row))
 
                 d, center = dispersion(points)
-                dst_sqrd = math.pow(center[0] - config.dot_region_x, 2) + math.pow(center[1] - config.dot_region_y, 2)
+                dst_sqrd = math.pow(center[0] - cropped_center_x, 2) + math.pow(center[1] - cropped_center_y, 2)
                     
                 print("pct_dark:{} dsp:{} dst_sqrd:{}".format(pct_dark, d, dst_sqrd))
 
