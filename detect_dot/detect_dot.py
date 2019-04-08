@@ -15,7 +15,7 @@ import ConfigParser
 from black_and_white import generate_debug_picture
 from geometry import *
 
-CENTER_DOT_COLOR = [255, 0, 0, 255]
+CENTER_DOT_COLOR = [180, 50, 100, 180]
 CLIP_OVERLAY_COLOR = [50, 50, 50, 180]
 REFERENCE_OVERLAY_COLOR = [0, 180, 180, 60]
 
@@ -44,14 +44,15 @@ class Config:
         self.width = config.getint("dot", "width")
         self.height = config.getint("dot", "height")
         self.num_pixels = self.width * self.height
-    
-        self.dot_region_center = Point(
-            config.getint("dot", "dot_region_x"),
-            config.getint("dot", "dot_region_y"))
-        self.dot_region_radius = config.getint("dot", "dot_region_radius")
-        self.dot_region_radius_squared = self.dot_region_radius * self.dot_region_radius
+
+        self.dot_target_delta = Point(
+            config.getint("dot_target", "reference_offset_x"),
+            config.getint("dot_target", "reference_offset_y"))
+        self.dot_target_radius = config.getint("dot_target", "dot_target_radius")
+        self.dot_target_radius_squared = self.dot_target_radius * self.dot_target_radius
 
         self.dot_params = Config.Dot_Params(config, "dot")
+        self.reference_dot_params = Config.Dot_Params(config, "reference_dot")
 
         self.dot_region = Rectangle(
             config.getint("crop", "left"),
@@ -92,8 +93,6 @@ def get_overlay(config):
     for point in config.reference_region.points():
         write_buf(buffer, point.x, point.y, config.width, REFERENCE_OVERLAY_COLOR)
     
-    write_buf(buffer, config.dot_region_center.x, config.dot_region_center.y, config.width, CENTER_DOT_COLOR)
-    
     return buffer            
 
 def get_detection_overlay(config, point, reference_point=None):
@@ -102,6 +101,14 @@ def get_detection_overlay(config, point, reference_point=None):
         write_buf(buffer, int(point.x), int(point.y), config.width, FOUND_DOT_COLOR)
     if reference_point is not None:
         write_buf(buffer, int(reference_point.x), int(reference_point.y), config.width, REFERENCE_DOT_COLOR)
+        target = config.dot_target_delta + reference_point
+        
+        r = config.dot_target_radius
+        for dx in range (-config.dot_target_radius, config.dot_target_radius + 1):
+            x = dx + target.x
+            dy = round(math.sqrt(r * r - dx * dx))
+            write_buf(buffer, int(target.x + dx), int(round(target.y + dy)), config.width, CENTER_DOT_COLOR)
+            write_buf(buffer, int(target.x + dx), int(round(target.y - dy)), config.width, CENTER_DOT_COLOR)
     return buffer            
 
 # Given a list of pixels (as x, y pairs), calculate root mean squared deviation
@@ -220,20 +227,26 @@ def main(config):
                     config.dot_region,
                     config.dot_params,
                     exclude_region=config.reference_region)
+                reference_center = find_dot(
+                    config,
+                    map_pixels(Y, subregion=config.reference_region),
+                    config.reference_region,
+                    config.reference_dot_params)
 
+                detection_buffer = get_detection_overlay(config, center, reference_center)
                 if detection_overlay is not None:
                     camera.remove_overlay(detection_overlay)
-                    detection_overlay = None
-
-                # The following values were determined experimentally.
-                if center is not None:
-                    dst_sqrd = math.pow(center.x - config.dot_region_center.x, 2) + math.pow(center.y - config.dot_region_center.y, 2)
-                    detection_overlay = camera.add_overlay(
-                        get_detection_overlay(config, center),
-                        format='rgba',
-                        layer=DOT_OVERLAY_LAYER) 
+                    detection_overlay = None                    
+                detection_overlay = camera.add_overlay(
+                    detection_buffer,
+                    format='rgba',
+                    layer=DOT_OVERLAY_LAYER)
+                    
+                if center is not None and reference_center is not None:                    
+                    dot_target = reference_center + config.dot_target_delta
+                    dst_sqrd = math.pow(center.x - dot_target.x, 2) + math.pow(center.y - dot_target.y, 2)
                     dot_anywhere_led.on()
-                    if dst_sqrd < config.dot_region_radius_squared:
+                    if dst_sqrd < config.dot_target_radius_squared:
                         success_led.on()
                     else:
                         success_led.off()

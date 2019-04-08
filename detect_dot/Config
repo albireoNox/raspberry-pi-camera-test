@@ -16,27 +16,40 @@ pct_dark_high=4.0
 # Maximum dispersion allowed for an image to be considered a dot
 max_dispersion=40
 
-# Region in which to seach for the dot, defined as the center point and radius, in pixel coordinates
-dot_region_x=54
-dot_region_y=64
-dot_region_radius=6
+
+[reference_dot]
+luminance_threshold=50
+max_dispersion=40
+pct_dark_low=0.15
+pct_dark_high=4.0
+
+
+[dot_target]
+# Region in which to seach for the dot, defined as the center point and radius relative to reference dot, in pixel coordinates
+reference_offset_x=0
+reference_offset_y=-60
+dot_target_radius=6
+
 
 [crop]
 # Number of pixels to crop from each side of the image before trying to detect the dot. 
 left=10
-right=20
-top=20
+right=0
+top=0
 bottom=30
+
 
 [reference]
 # Define the region to look for the reference dot by the top-left and bottom-right coordinates
-left=0
+left=20
 top=80
-right=128
+right=108
 bottom=128
+
 
 [camera]
 rotation=90
+
 
 [pins]
 
